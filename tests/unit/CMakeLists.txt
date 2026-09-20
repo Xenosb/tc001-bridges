@@ -13,6 +13,7 @@ target_sources(app PRIVATE
   src/brightness_test.c
   src/graphics_test.c
   src/history_test.c
+  src/power_test.c
   src/time_test.c
   src/format_test.c
   src/resp_scan_test.c
@@ -23,6 +24,7 @@ target_sources(app PRIVATE
   ${APP_SRC}/form.c
   ${APP_SRC}/history_core.c
   ${APP_SRC}/format.c
+  ${APP_SRC}/power_core.c
   ${APP_SRC}/qt_logo.c
   ${APP_SRC}/resp_scan.c
   ${APP_SRC}/scroll.c

@@ -135,6 +135,18 @@ after a month.
 The percentage is an estimate from the battery voltage, and whether it is charging is inferred from
 that voltage too, because the clock has no signal for it (see [Limitations](#limitations)).
 
+### Saving the battery
+
+On battery, the display turns off after two minutes without a button press. **Any button** turns it
+back on, and that press does nothing else, so waking it in the dark cannot switch app or change a
+setting. Plugging the clock in also turns it on. While the clock is being set up (its access point
+is open) or starting, the display stays on.
+
+The clock has no signal that says whether it is on external power, so this is a guess from how the
+battery voltage moves: it jumps when a cable is plugged in or pulled out, and creeps up while
+charging and down while discharging. It starts out assuming external power, and only turns the
+display off once there is evidence of battery. See [Limitations](#limitations).
+
 ## Configuration
 
 Build-time options are in `Kconfig`; set them in `prj.conf`, or in a `local.conf` next to it (ignored
@@ -150,6 +162,7 @@ by git) with lines such as `CONFIG_TC001_STATS_REFRESH_S=600`.
 | `CONFIG_TC001_LDR_DARK_COUNT`       | `3000`            | light sensor count that gives the dimmest automatic brightness            |
 | `CONFIG_TC001_LDR_BRIGHT_COUNT`     | `150`             | light sensor count that gives full automatic brightness                   |
 | `CONFIG_TC001_BATTERY_UV_PER_COUNT` | `1980`            | battery voltage per ADC count, in microvolts: the battery calibration     |
+| `CONFIG_TC001_DISPLAY_OFF_S`        | `120`             | seconds without a button press after which the display turns off on battery; `0` keeps it on |
 
 **Automatic brightness** maps the light sensor onto 5 to 100 % on a logarithmic scale between the two
 counts. In a normal evening room the sensor reads about 400, and this clock's sensor reads a *lower*
@@ -185,7 +198,8 @@ the stream as it arrives instead of parsing a document.
 - **main** runs the network tasks (time, location, weather, stats) one after the other, each with its
   own interval and retry delay. TLS memory allows only one connection at a time.
 - **ui** owns the display. It ticks every 40 ms, asks the current app what to draw, slides pages and
-  apps in, and follows the brightness. The other threads only change state that it reads.
+  apps in, follows the brightness, samples the battery, and turns the display off and on. The other
+  threads only change state that it reads.
 - **HTTP server** serves the web pages.
 - **input callbacks** turn the three buttons into `ui_step()` and `ui_middle()`.
 - The **system work queue** starts and stops the setup access point.
@@ -220,6 +234,7 @@ src/               the firmware
   wifi.c, setup.c, portal.c                 Wi-Fi, the setup access point, the web pages
   config.c, history.c                       what is saved in flash
   battery.c, light.c, brightness*.c         the two analog inputs and the brightness
+  power.c, power_core.c                     battery sampling and the guess at the power source
   format.c, timeconv.c, scroll.c, ...       small pure helpers
 tests/unit/        unit tests of those helpers
 tools/             generators for the font and the logos
@@ -245,8 +260,8 @@ project-requirements.md   what the clock should do
 
 `tests/unit` holds ztest suites for the logic that does not need hardware: number extraction from
 responses, the web form parser, count, time, date and temperature formatting, the font table, colours,
-weather code mapping, time conversion, the history record, the battery curve, brightness and
-scrolling. Run them on a Linux host with `west twister -p native_sim -T tests/unit`; `native_sim` is
+weather code mapping, time conversion, the history record, the battery curve, the power source
+estimate, brightness and scrolling. Run them on a Linux host with `west twister -p native_sim -T tests/unit`; `native_sim` is
 not available on macOS.
 
 ### Regenerating the font and logos
@@ -265,6 +280,12 @@ Edit the art in `tools/pixel_logos.py`, not in the generated files.
   linear, so the percentage is an estimate (`CONFIG_TC001_BATTERY_UV_PER_COUNT`). The clock has no
   charging signal, so "charging" is inferred: near full voltage, or rising over ten minutes. It can be
   wrong for a while, for example just after unplugging a fully charged battery.
+- **Power source.** Whether the clock is on external power is a guess from the battery voltage. A
+  cable pulled out while the battery is charged and full changes the voltage very little, so it can
+  take several minutes to notice, and in rare cases the display may stay on or turn off when it should
+  not (a button press brings it back). Turning the display off does not cut the LEDs' own idle
+  current, and Wi-Fi stays on so the data stays fresh: the saving is the lit LEDs, which are most of
+  the load.
 - **Trends** need history to build up, see above.
 - **Certificates.** Their expiry dates are not checked, because the clock has no trusted time at
   start-up; the chain, signatures and host name are. The GlobalSign root used for crates.io expires in

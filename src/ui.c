@@ -21,6 +21,7 @@
 #include "brightness.h"
 #include "config.h"
 #include "gfx.h"
+#include "power.h"
 #include "ui.h"
 
 LOG_MODULE_REGISTER(ui, LOG_LEVEL_INF);
@@ -32,6 +33,7 @@ LOG_MODULE_REGISTER(ui, LOG_LEVEL_INF);
 #define MARQUEE_STEP     1 /* pixels per tick */
 #define BRIGHTNESS_TICK_MS 500
 #define TITLE_MS 1500
+#define OFF_TICK_MS 100 /* how often the dark display checks whether to wake up */
 #define TEXT_MAX         112
 
 #define COLOR_STATUS  0x787878
@@ -83,6 +85,12 @@ static struct gfx_fb frame;
 static int marquee_x;
 static int slide_dir;
 static int64_t next_brightness_tick;
+
+/* The display turns off on battery. Both are set from other threads too, under the lock. */
+static volatile bool screen_off;
+static volatile bool wake_requested;
+static int64_t last_activity;
+static const struct gfx_fb blank; /* all zero: every LED off */
 
 /* The next enabled app in direction @p dir, or -1 if there is none. @p from may be -1. */
 static int next_app(int from, int dir)
@@ -235,6 +243,31 @@ static enum action update_state(void)
 	return ACT_NONE;
 }
 
+static void screen_sleep(void)
+{
+	gfx_present(&blank);
+	screen_off = true;
+	power_load_changed(); /* the clock's load drops: not a change of power source */
+	LOG_INF("Display off: on battery and idle for %d s", CONFIG_TC001_DISPLAY_OFF_S);
+}
+
+static void screen_wake(int64_t now, const char *why)
+{
+	screen_off = false;
+	wake_requested = false;
+	last_activity = now;
+	gfx_present(&shown);
+	power_load_changed();
+	LOG_INF("Display on: %s", why);
+}
+
+/* On battery, in the apps, and nobody has pressed anything for a while */
+static bool should_turn_off(int64_t now)
+{
+	return CONFIG_TC001_DISPLAY_OFF_S > 0 && mode == MODE_APPS && !power_external() &&
+	       now - last_activity >= (int64_t)CONFIG_TC001_DISPLAY_OFF_S * 1000;
+}
+
 static void ui_main(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a);
@@ -243,6 +276,28 @@ static void ui_main(void *a, void *b, void *c)
 
 	while (1) {
 		enum action action;
+		int64_t now = k_uptime_get();
+
+		power_tick(now);
+
+		/* Setting up, or starting up: the display is not something to switch off */
+		if (mode != MODE_APPS) {
+			last_activity = now;
+		}
+
+		if (screen_off) {
+			if (wake_requested) {
+				screen_wake(now, "a button was pressed");
+			} else if (power_external()) {
+				screen_wake(now, "external power");
+			} else {
+				k_msleep(OFF_TICK_MS);
+				continue;
+			}
+		} else if (should_turn_off(now)) {
+			screen_sleep();
+			continue;
+		}
 
 		k_mutex_lock(&lock, K_FOREVER);
 		action = update_state();
@@ -350,6 +405,21 @@ void ui_set_items(const struct stat_item *items, size_t count)
 	app_bridges_set_items(items, count);
 	app_trends_set_items(items, count);
 	k_mutex_unlock(&lock);
+}
+
+bool ui_activity(void)
+{
+	bool woke;
+
+	k_mutex_lock(&lock, K_FOREVER);
+	last_activity = k_uptime_get();
+	woke = screen_off;
+	if (woke) {
+		wake_requested = true;
+	}
+	k_mutex_unlock(&lock);
+
+	return woke;
 }
 
 void ui_step(int direction)

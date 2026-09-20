@@ -7,6 +7,8 @@
 #ifndef TC001_UI_H_
 #define TC001_UI_H_
 
+#include <stdbool.h>
+
 #include "stats.h"
 
 /** Start the display thread. Must be called once before any other ui_* call. */
@@ -35,6 +37,14 @@ void ui_start_apps(void);
 
 /** New bridge numbers. Safe to call before ui_start_apps(). */
 void ui_set_items(const struct stat_item *items, size_t count);
+
+/**
+ * Note that a button was pressed, which keeps the display on for a while longer on battery.
+ *
+ * @return true if the display was off and this press only turned it on, so the caller should not act
+ *         on it as well
+ */
+bool ui_activity(void);
 
 /** Switch to the next (+1) or previous (-1) enabled app. */
 void ui_step(int direction);

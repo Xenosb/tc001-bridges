@@ -20,12 +20,7 @@
 #include <zephyr/kernel.h>
 
 #include "app.h"
-#include "battery.h"
-
-#define SAMPLE_MS        10000
-#define TREND_SAMPLES    60 /* ten minutes of samples */
-#define RISING_MV        20 /* climbing this much over the trend window means charging */
-#define NEAR_FULL_MV     4130
+#include "power.h"
 
 #define COLOR_OUTLINE 0xb0b0b0
 #define COLOR_GOOD    0x64dc8c
@@ -57,46 +52,11 @@ static const char *const battery_shape[BATTERY_H] = {
 	"XXXXXXXXXXXXXX..",
 };
 
-static int history[TREND_SAMPLES];
-static size_t history_count;
-static size_t history_next;
-static int64_t next_sample;
-static bool have_reading;
-static int millivolts;
-static int percent;
-static bool charging;
 static bool redraw;
-static bool ready = true;
 static int drawn_bar_step = -1;
-
-static void take_sample(void)
-{
-	int mv = battery_millivolts(NULL);
-	int oldest;
-
-	if (mv < 0) {
-		ready = false;
-		return;
-	}
-	ready = true;
-
-	if (history_count == TREND_SAMPLES) {
-		oldest = history[history_next];
-	} else {
-		oldest = history_count > 0 ? history[0] : mv;
-	}
-	history[history_next] = mv;
-	history_next = (history_next + 1) % TREND_SAMPLES;
-	if (history_count < TREND_SAMPLES) {
-		history_count++;
-	}
-
-	millivolts = mv;
-	percent = battery_percent(mv);
-	charging = mv >= NEAR_FULL_MV || mv - oldest >= RISING_MV;
-	have_reading = true;
-	redraw = true;
-}
+static int drawn_percent = -1;
+static bool drawn_charging;
+static bool drawn_have;
 
 /* Which position of the charging animation it is at @p now */
 static int bar_step(int64_t now)
@@ -106,6 +66,8 @@ static int bar_step(int64_t now)
 
 static void draw(struct gfx_fb *fb, int64_t now)
 {
+	int percent = power_percent();
+	bool charging = power_external();
 	char text[8];
 	int filled = (percent * INTERIOR_W + 50) / 100;
 	uint32_t color = percent > 50 ? COLOR_GOOD : (percent > 20 ? COLOR_LOW : COLOR_EMPTY);
@@ -136,23 +98,24 @@ static void draw(struct gfx_fb *fb, int64_t now)
 		}
 	}
 	drawn_bar_step = step;
+	drawn_percent = percent;
+	drawn_charging = charging;
 }
 
 static void enter(int64_t now)
 {
-	next_sample = now;
+	ARG_UNUSED(now);
 	redraw = true;
 }
 
 static enum app_result update(struct gfx_fb *fb, int64_t now)
 {
-	if (now >= next_sample) {
-		take_sample();
-		next_sample = now + SAMPLE_MS;
-	}
+	bool have = power_have_reading();
 
-	/* While charging, the bar moves on every step of its animation */
-	if (charging && bar_step(now) != drawn_bar_step) {
+	/* Redraw when what is shown is out of date: a new reading, or the charging bar moved on */
+	if (have != drawn_have || (have && (power_percent() != drawn_percent ||
+					   power_external() != drawn_charging)) ||
+	    (have && power_external() && bar_step(now) != drawn_bar_step)) {
 		redraw = true;
 	}
 
@@ -160,8 +123,9 @@ static enum app_result update(struct gfx_fb *fb, int64_t now)
 		return APP_IDLE;
 	}
 	redraw = false;
+	drawn_have = have;
 
-	if (!have_reading) {
+	if (!have) {
 		gfx_text(fb, (GFX_W - gfx_text_width("N/A")) / 2, 1, "N/A", 0x505050);
 	} else {
 		draw(fb, now);

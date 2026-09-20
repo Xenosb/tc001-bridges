@@ -115,6 +115,9 @@ static void button_cb(struct input_event *evt, void *user_data)
 	if (evt->type != INPUT_EV_KEY || !evt->value) {
 		return;
 	}
+	if (ui_activity()) {
+		return; /* the display was off: this press only turned it on */
+	}
 
 	switch (evt->code) {
 	case INPUT_KEY_LEFT:

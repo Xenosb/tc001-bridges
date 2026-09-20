@@ -66,4 +66,15 @@ config TC001_LDR_BRIGHT_COUNT
 	help
 	  The count at which the display is at full brightness. See the dark count above.
 
+config TC001_DISPLAY_OFF_S
+	int "Turn the display off after this many seconds on battery"
+	default 120
+	range 0 3600
+	help
+	  When the clock seems to be running from its battery rather than external power (guessed from
+	  how the battery voltage moves, there is no signal for it) and nobody has pressed a button for
+	  this long, the display goes dark to save the battery. Any button press turns it back on, and
+	  that press does nothing else. It also comes back by itself when the clock is plugged in.
+	  0 keeps the display on always.
+
 source "Kconfig.zephyr"

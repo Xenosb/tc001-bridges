@@ -44,6 +44,8 @@ target_sources(app PRIVATE
   src/logos.c
   src/main.c
   src/portal.c
+  src/power.c
+  src/power_core.c
   src/qt_logo.c
   src/resp_scan.c
   src/scroll.c
