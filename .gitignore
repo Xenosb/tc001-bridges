@@ -1,0 +1,6 @@
+build/
+local.conf
+.cache/
+__pycache__/
+*.der
+*.ttf

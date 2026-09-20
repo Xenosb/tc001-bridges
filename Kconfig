@@ -1,0 +1,69 @@
+# Copyright (c) 2026 Bruno Vunderl
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+mainmenu "TC001 Bridges"
+
+config TC001_AP_SSID
+	string "Setup access point name"
+	default "TC001-Bridges"
+	help
+	  Network the clock creates when it cannot join a saved network.
+
+config TC001_AP_PSK
+	string "Setup access point password"
+	default "tc001bridges"
+	help
+	  WPA2 password of the setup access point, 8 to 63 characters. The Wi-Fi
+	  password entered on the setup page travels over this link, so a
+	  password is used by default. Leave empty for an open network.
+
+config TC001_AP_IP
+	string "Setup access point IPv4 address"
+	default "192.168.4.1"
+	help
+	  Address of the clock while the setup access point is up, and of its web
+	  page. The DHCP server hands out addresses ten above this one.
+
+config TC001_STATS_REFRESH_S
+	int "Refresh interval in seconds"
+	default 300
+	help
+	  How often GitHub, crates.io and NuGet are queried again. A refresh makes
+	  five HTTPS requests. GitHub allows 60 unauthenticated requests per hour,
+	  and each refresh uses two, so keep this at 120 seconds or more.
+
+config TC001_BRIGHTNESS
+	int "LED brightness in percent"
+	range 1 100
+	default 40
+	help
+	  All 256 LEDs at full white would draw several amps, more than USB
+	  provides, so everything drawn is scaled down.
+
+config TC001_BATTERY_UV_PER_COUNT
+	int "Battery voltage per ADC count, in microvolts"
+	default 1980
+	help
+	  The battery is measured through a resistor divider on GPIO34 and the ESP32's ADC is not
+	  very linear, so this is an estimate: about 1.98 mV of battery voltage per count. It was
+	  worked out with the battery charged and the clock on USB, reading about 2098 counts for
+	  roughly 4.15 V. If the percentage looks off, adjust it: the battery voltage is the raw
+	  count times this value.
+
+config TC001_LDR_DARK_COUNT
+	int "Light sensor count in the dark"
+	default 3000
+	help
+	  Automatic brightness maps the ambient light sensor's ADC count (0 to 4095) onto the display
+	  brightness on a logarithmic scale: this count is the dimmest setting. The photoresistor
+	  reads a LOW count in bright light on this clock, so the dark count is the higher one. If
+	  the display gets dimmer when you shine light on the sensor, swap these two values.
+	  In a normal evening room the sensor reads about 400.
+
+config TC001_LDR_BRIGHT_COUNT
+	int "Light sensor count in bright light"
+	default 150
+	help
+	  The count at which the display is at full brightness. See the dark count above.
+
+source "Kconfig.zephyr"
