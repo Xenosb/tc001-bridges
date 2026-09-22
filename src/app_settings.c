@@ -8,7 +8,8 @@
  * Settings menu. In the rotation this is a "SETTINGS" card; the middle button opens the menu, where
  * left and right move between the items and the middle button chooses one:
  *
- *   BRIGHTNESS   AUTO on/off, the level (or with AUTO on, a bias from the automatic level), BACK
+ *   BRIGHTNESS   AUTO on/off, the level (or with AUTO on, a bias from the automatic level),
+ *                SET DEFAULT (freezes the current auto level as the manual one), BACK
  *   NETWORK      the network, the address, NEW NET (sets up a network), BACK
  *   EXIT
  *
@@ -24,6 +25,7 @@
 #include "app.h"
 #include "brightness.h"
 #include "config.h"
+#include "light.h"
 #include "scroll.h"
 #include "setup.h"
 #include "wifi.h"
@@ -59,7 +61,7 @@ static int item_count(void)
 	case MENU_ROOT:
 		return 3;
 	case MENU_BRIGHTNESS:
-		return 3;
+		return 4;
 	case MENU_NETWORK:
 		return 4;
 	default:
@@ -98,6 +100,9 @@ static uint32_t item_text(char *buf, size_t len)
 				snprintf(buf, len, "LEVEL %d", cfg->brightness);
 			}
 			return COLOR_VALUE;
+		case 2:
+			snprintf(buf, len, "SET DEFAULT");
+			return COLOR_ACTION;
 		default:
 			snprintf(buf, len, "BACK");
 			return COLOR_BACK;
@@ -147,6 +152,21 @@ static void leave_level(void)
 		config_save();
 		level_changed = false;
 	}
+}
+
+/* Read the current ambient light and make what it calls for the manual default from now on */
+static void set_current_as_default(struct config *cfg)
+{
+	int raw = light_read();
+
+	if (raw >= 0) {
+		int target = brightness_from_light(raw) + cfg->brightness_bias;
+
+		cfg->brightness = CLAMP(target, BRIGHTNESS_MIN, BRIGHTNESS_MAX);
+		cfg->auto_brightness = false;
+		config_save();
+	}
+	redraw = true;
 }
 
 static void enter(int64_t now)
@@ -213,6 +233,8 @@ static void middle(int64_t now)
 			redraw = true;
 		} else if (index_in_menu == 1) {
 			go(MENU_LEVEL, 0, now);
+		} else if (index_in_menu == 2) {
+			set_current_as_default(cfg);
 		} else {
 			go(MENU_ROOT, 0, now);
 		}
