@@ -161,8 +161,7 @@ int main(void)
 	ret = wifi_connect_saved();
 	if (ret) {
 		LOG_WRN("No Wi-Fi connection (%d), starting the setup access point", ret);
-		setup_boot();
-		return 0;
+		setup_boot(); /* returns if the middle button cancelled it, to show the apps below */
 	}
 
 	ui_start_apps();

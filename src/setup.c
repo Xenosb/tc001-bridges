@@ -41,6 +41,9 @@ static void timeout_handler(struct k_work *work)
 }
 static K_WORK_DELAYABLE_DEFINE(timeout_work, timeout_handler);
 
+/* Given by the middle button to cancel setup_boot(), which is otherwise waiting out the timeout */
+static K_SEM_DEFINE(boot_cancel, 0, 1);
+
 /* Open the access point and the web page, and put the details on the display */
 static int begin(void)
 {
@@ -73,8 +76,17 @@ void setup_boot(void)
 		return;
 	}
 
-	/* If nobody sets up a network the surroundings may have changed: start over */
-	k_sleep(K_MINUTES(TIMEOUT_MIN));
+	/* Wait for a network to be saved (which reboots on its own, see portal.c), the middle
+	 * button to cancel, or the timeout: if nobody sets up a network the surroundings may have
+	 * changed, so start over.
+	 */
+	if (k_sem_take(&boot_cancel, K_MINUTES(TIMEOUT_MIN)) == 0) {
+		LOG_INF("Setup cancelled from the button, showing the apps instead");
+		wifi_stop_ap();
+		active = false;
+		return;
+	}
+
 	LOG_INF("Nobody set up a network in %d minutes, restarting", TIMEOUT_MIN);
 	sys_reboot(SYS_REBOOT_COLD);
 }
@@ -126,7 +138,6 @@ void setup_cancel(void)
 		/* On the work queue: stopping the access point takes a moment */
 		k_work_submit(&stop_work);
 	} else {
-		LOG_INF("Setup cancelled from the button, restarting");
-		sys_reboot(SYS_REBOOT_COLD);
+		k_sem_give(&boot_cancel);
 	}
 }
