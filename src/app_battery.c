@@ -29,10 +29,13 @@
 #define COLOR_TEXT    0xffffff
 #define COLOR_BAR     0xffd23c
 
-/* The battery fills the height of the display: a 14 pixel body and a 2 pixel terminal */
+/* The battery is centered in the display height, with a 1 px gap top and bottom: a 12 pixel body
+ * and a 2 pixel terminal
+ */
 #define BATTERY_W        16
-#define BATTERY_H        8
-#define INTERIOR_W       12 /* columns 1 to 12, rows 1 to 6 */
+#define BATTERY_H        6
+#define BATTERY_Y        1 /* to center it: GFX_H is 8 */
+#define INTERIOR_W       12 /* columns 1 to 12 */
 #define TEXT_LEFT        BATTERY_W
 #define TEXT_AREA        (GFX_W - 1 - TEXT_LEFT) /* up to the column before the charging bar */
 
@@ -44,8 +47,6 @@
 static const char *const battery_shape[BATTERY_H] = {
 	"XXXXXXXXXXXXXX..",
 	"X............X..",
-	"X............XXX",
-	"X............XXX",
 	"X............XXX",
 	"X............XXX",
 	"X............X..",
@@ -77,10 +78,10 @@ static void draw(struct gfx_fb *fb, int64_t now)
 		filled = 1; /* almost empty is not the same as empty */
 	}
 
-	gfx_mask(fb, 0, 0, battery_shape, BATTERY_H, COLOR_OUTLINE);
+	gfx_mask(fb, 0, BATTERY_Y, battery_shape, BATTERY_H, COLOR_OUTLINE);
 	for (int col = 0; col < filled; col++) {
 		for (int row = 1; row < BATTERY_H - 1; row++) {
-			gfx_pixel(fb, 1 + col, row, color);
+			gfx_pixel(fb, 1 + col, BATTERY_Y + row, color);
 		}
 	}
 
